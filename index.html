@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Adaptive Learning Analyzer</title>
+
+    <link rel="stylesheet" href="style.css">
+
+    <!-- PDF.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<header>
+    <h1>📘 Adaptive Learning Analyzer</h1>
+    <p>Upload study material • Answer questions • Get feedback</p>
+</header>
+
+<section class="card">
+    <h2>1️⃣ Upload Study PDF</h2>
+    <input type="file" id="pdfFile" accept="application/pdf">
+    <button onclick="loadPDF()">Load PDF</button>
+    <p id="pdfStatus"></p>
+</section>
+
+<section class="card">
+    <h2>2️⃣ Answer Generated Questions</h2>
+    <div id="questions"></div>
+    <button id="analyzeBtn" onclick="analyzeAnswers()" style="display:none;">
+        Analyze My Answers
+    </button>
+</section>
+
+<section class="card">
+    <h2>3️⃣ Learning Analysis</h2>
+    <div id="result"></div>
+    <canvas id="performanceChart"></canvas>
+</section>
+
+<script src="script.js"></script>
+</body>
+</html>
