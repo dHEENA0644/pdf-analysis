@@ -1,11 +1,11 @@
 let extractedText = "";
 let questions = [];
-let scores = [];
 let chartInstance = null;
 
 pdfjsLib.GlobalWorkerOptions.workerSrc =
-    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
 
+// ================= PDF LOAD =================
 function loadPDF() {
     const file = document.getElementById("pdfFile").files[0];
     if (!file) {
@@ -18,19 +18,18 @@ function loadPDF() {
         const typedArray = new Uint8Array(this.result);
 
         pdfjsLib.getDocument(typedArray).promise.then(pdf => {
-            let textPromises = [];
-
+            let promises = [];
             for (let i = 1; i <= pdf.numPages; i++) {
-                textPromises.push(
+                promises.push(
                     pdf.getPage(i).then(page =>
-                        page.getTextContent().then(content =>
-                            content.items.map(item => item.str).join(" ")
+                        page.getTextContent().then(tc =>
+                            tc.items.map(item => item.str).join(" ")
                         )
                     )
                 );
             }
 
-            Promise.all(textPromises).then(texts => {
+            Promise.all(promises).then(texts => {
                 extractedText = texts.join(" ").toLowerCase();
                 document.getElementById("pdfStatus").innerText =
                     "PDF loaded successfully ✅";
@@ -42,30 +41,32 @@ function loadPDF() {
     reader.readAsArrayBuffer(file);
 }
 
+// ================= QUESTION GENERATION =================
 function generateQuestions() {
-    const keywords = [
-        "definition",
-        "process",
-        "types",
-        "advantages",
-        "disadvantages",
-        "example",
-        "function"
-    ];
-
-    questions = keywords.filter(k => extractedText.includes(k));
     const qDiv = document.getElementById("questions");
     qDiv.innerHTML = "";
+    questions = [];
 
-    if (questions.length === 0) {
-        qDiv.innerHTML = "<p>No key topics detected. Try another PDF.</p>";
+    let sentences = extractedText
+        .split(/[.!?]/)
+        .map(s => s.trim())
+        .filter(s => s.length > 40 && s.length < 200);
+
+    if (sentences.length < 3) {
+        qDiv.innerHTML =
+            "<p>Not enough meaningful content to generate questions.</p>";
         return;
     }
 
-    questions.forEach((q, i) => {
+    sentences = shuffle(sentences).slice(0, 5);
+
+    sentences.forEach((s, i) => {
+        const question = makeQuestion(s);
+        questions.push({ question: question, answerHint: s });
+
         qDiv.innerHTML += `
             <div class="question">
-                <b>Q${i + 1}: Explain ${q}</b>
+                <b>Q${i + 1}: ${question}</b>
                 <textarea id="ans${i}" placeholder="Your answer..."></textarea>
             </div>
         `;
@@ -74,51 +75,65 @@ function generateQuestions() {
     document.getElementById("analyzeBtn").style.display = "inline-block";
 }
 
+// ================= ANSWER ANALYSIS =================
 function analyzeAnswers() {
-    let totalScore = 0;
-    scores = [];
+    let score = 0;
 
     questions.forEach((q, i) => {
         const ans = document.getElementById(`ans${i}`).value.toLowerCase();
+        const keywords = q.answerHint.split(" ").slice(0, 6);
 
-        if (ans.includes(q)) {
-            totalScore += 10;
-            scores.push(10);
+        if (keywords.some(word => ans.includes(word))) {
+            score += 10;
         } else if (ans.length > 30) {
-            totalScore += 5;
-            scores.push(5);
-        } else {
-            scores.push(0);
+            score += 5;
         }
     });
 
-    const percentage = Math.round(
-        (totalScore / (questions.length * 10)) * 100
-    );
+    const percent = Math.round((score / (questions.length * 10)) * 100);
+    let level, feedback;
 
-    let level, motivation;
-
-    if (percentage >= 75) {
+    if (percent >= 75) {
         level = "Good Understanding";
-        motivation = "Great work! Your concepts are clear.";
-    } else if (percentage >= 50) {
+        feedback = "Great work! Your answers reflect strong comprehension.";
+    } else if (percent >= 50) {
         level = "Average Understanding";
-        motivation = "You are improving. Revise weak areas.";
+        feedback = "You are improving. Review the weak points and try again.";
     } else {
         level = "Needs Improvement";
-        motivation = "Don't worry. Focus on basics and try again.";
+        feedback = "Focus on understanding the key ideas and retry.";
     }
 
     document.getElementById("result").innerHTML = `
-        <p><b>Score:</b> ${percentage}%</p>
-        <p><b>Understanding Level:</b> ${level}</p>
-        <p><b>Feedback:</b> ${motivation}</p>
+        <p><b>Score:</b> ${percent}%</p>
+        <p><b>Level:</b> ${level}</p>
+        <p><b>Feedback:</b> ${feedback}</p>
     `;
 
-    saveAttempt(percentage);
+    saveAttempt(percent);
     drawChart();
 }
 
+// ================= HELPERS =================
+function makeQuestion(sentence) {
+    if (sentence.includes(" is ")) {
+        return "What is " + sentence.split(" is ")[0] + "?";
+    }
+    if (sentence.includes(" occurs")) {
+        return "When does " + sentence.replace(" occurs", "") + "?";
+    }
+    return "Explain this statement: \"" + sentence.substring(0, 60) + "...\"";
+}
+
+function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+}
+
+// ================= STORAGE + CHART =================
 function saveAttempt(score) {
     let history = JSON.parse(localStorage.getItem("attempts")) || [];
     history.push(score);
@@ -129,9 +144,7 @@ function drawChart() {
     const history = JSON.parse(localStorage.getItem("attempts")) || [];
     const ctx = document.getElementById("performanceChart");
 
-    if (chartInstance) {
-        chartInstance.destroy();
-    }
+    if (chartInstance) chartInstance.destroy();
 
     chartInstance = new Chart(ctx, {
         type: "line",
@@ -147,10 +160,7 @@ function drawChart() {
         },
         options: {
             scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 100
-                }
+                y: { beginAtZero: true, max: 100 }
             }
         }
     });
